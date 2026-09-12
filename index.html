@@ -38,7 +38,7 @@ main{max-width:1500px;margin:auto;padding:24px}.hero{background:#111827;color:#f
 <body>
 <header><div class="brand">🚗 大桐桃園-新車美容鍍膜預約</div><div class="nav"><span id="sync" class="sync">● 雲端連線中</span><button class="btn light" onclick="page('dashboard')">工作台</button><button class="btn outline" onclick="page('calendar')">月曆</button><button class="btn primary" onclick="page('new')">＋ 新增預約</button></div></header>
 <main>
-<section id="dashboard"><div class="hero"><h2>新車美容施工工作台</h2><div>所有使用者共用同一個 Supabase 雲端資料庫。VIN 末7碼、業代名、服務、交車日期為必填；車牌選填。</div></div><div id="msg"></div><div class="grid" id="kpi"></div><div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>排程清單</h3><button class="btn" onclick="load()">↻ 重新整理</button><input id="search" placeholder="搜尋 VIN／業代／車型" oninput="renderTable()" style="padding:9px;border:1px solid #ddd;border-radius:8px"></div><div class="tablewrap"><table class="table"><thead><tr><th>施工日</th><th>時間</th><th>資源</th><th>服務</th><th>VIN末7碼</th><th>車型</th><th>業代</th><th>交車</th><th>優先</th><th>狀態</th></tr></thead><tbody id="tbody"></tbody></table></div></div></section>
+<section id="dashboard"><div class="hero"><h2>美容施工工作台</h2><div>所有使用者共用同一個 Supabase 雲端資料庫。VIN 末7碼、業代名、服務、交車日期為必填；車牌選填。</div></div><div id="msg"></div><div class="grid" id="kpi"></div><div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>排程清單</h3><button class="btn" onclick="load()">↻ 重新整理</button><input id="search" placeholder="搜尋 VIN／業代／車型" oninput="renderTable()" style="padding:9px;border:1px solid #ddd;border-radius:8px"></div><div class="tablewrap"><table class="table"><thead><tr><th>施工日</th><th>時間</th><th>資源</th><th>服務</th><th>VIN末7碼</th><th>車型</th><th>業代</th><th>交車</th><th>優先</th><th>狀態</th></tr></thead><tbody id="tbody"></tbody></table></div></div></section>
 <section id="new" style="display:none"><div class="card"><h2>新增美容預約</h2><form id="form"><div class="formgrid">
 <div class="field"><label>VIN 末7碼 *</label><input id="vin" maxlength="7" minlength="7" pattern="[A-Za-z0-9]{7}" required placeholder="例如 A123456"></div>
 <div class="field"><label>車牌（選填）</label><input id="plate"></div><div class="field"><label>車型</label><input id="model"></div><div class="field"><label>車色</label><input id="color"></div>
@@ -147,18 +147,41 @@ function setSync(ok,t){let x=document.getElementById("sync");x.textContent="● 
 function notify(t,e=false){let x=document.getElementById("msg");x.className=e?"notice err":"notice";x.textContent=t;setTimeout(()=>x.textContent="",5000)}
 function iso(d){return d.toISOString().slice(0,10)}function priority(del){let n=Math.ceil((new Date(del)-new Date(new Date().toDateString()))/86400000);return n<=1?"P1":n<=3?"P2":"P3"}
 function find(d,s){
-  // 只有週日不可施工；週六可以正常施工
-  if(!isWorkday(d)) return null;
-  let ds=iso(d),a=rows.filter(x=>x.status!="cancelled"&&x.work_date===ds&&x.service===s);
-  if(a.length>=SERVICES[s].limit)return null;
-  for(let r=1;r<=SERVICES[s].resources;r++){
-    for(let z of SERVICES[s].slots){
-      if(!a.some(x=>x.resource_no===r&&x.start_time<z[1]&&x.end_time>z[0]))
-        return{resource_no:r,start_time:z[0],end_time:z[1]};
+  // 唯一固定不可施工日：週日
+  if(d.getDay() === 0) return null;
+
+  const ds = iso(d);
+  const a = rows.filter(x =>
+    x.status !== "cancelled" &&
+    x.work_date === ds &&
+    x.service === s
+  );
+
+  // 當日該服務已達每日上限
+  if(a.length >= SERVICES[s].limit) return null;
+
+  // 找可用資源與時段
+  for(let r=1; r<=SERVICES[s].resources; r++){
+    for(const z of SERVICES[s].slots){
+      const occupied = a.some(x =>
+        x.resource_no === r &&
+        x.start_time < z[1] &&
+        x.end_time > z[0]
+      );
+      if(!occupied){
+        return {
+          resource_no:r,
+          start_time:z[0],
+          end_time:z[1]
+        };
+      }
     }
   }
+
+  // 資源／時段全部使用完，往前遞補
   return null;
 }
+
 function recommend(del,s){
   // 洗車打蠟：交車日前 1 天；全車鍍膜：交車日前 2 天
   // 若施工日遇週日或當日額滿，往前逐日遞補。
@@ -173,13 +196,80 @@ function recommend(del,s){
   return null;
 }
 function page(p){["dashboard","new","calendar"].forEach(x=>document.getElementById(x).style.display=x===p?"block":"none");if(p==="dashboard")renderAll();if(p==="calendar")renderCal()}
-document.getElementById("form").onsubmit=async e=>{e.preventDefault();if(!configured()){notify("尚未設定 Supabase，無法共用雲端資料。請先設定 config.js。",true);return}
-let vin=document.getElementById("vin").value.trim().toUpperCase(),sp=document.getElementById("salesperson").value.trim(),del=document.getElementById("delivery").value,s=document.getElementById("service").value;
-if(!/^[A-Z0-9]{7}$/.test(vin)||!sp||!del){notify("VIN 末7碼、業代名與交車日期皆為必填。",true);return}
-if(rows.some(x=>x.vin===vin&&x.status!=="cancelled")){notify("此 VIN 末7碼已有預約。",true);return}
-let z=recommend(del,s);if(!z){notify("交車日前沒有可用排程。",true);return}
-let x={vin,plate:document.getElementById("plate").value.trim(),model:document.getElementById("model").value.trim(),color:document.getElementById("color").value.trim(),salesperson:sp,service:s,delivery_date:del,...z,priority:priority(del),status:"scheduled",note:document.getElementById("note").value.trim()};
-try{let r=await fetch(URL+"/rest/v1/appointments",{method:"POST",headers:{...headers,"Prefer":"return=representation"},body:JSON.stringify(x)});if(!r.ok){let tx=await r.text();throw new Error(tx)}await load();e.target.reset();notify("預約已寫入雲端，其他使用者重新整理即可看到。");page("dashboard")}catch(err){notify("寫入雲端失敗："+err.message,true)}};
+document.getElementById("form").onsubmit=async e=>{
+  e.preventDefault();
+
+  try{
+    if(!configured()){
+      notify("尚未設定 Supabase，無法共用雲端資料。請先設定 config.js。",true);
+      return;
+    }
+
+    let vin=document.getElementById("vin").value.trim().toUpperCase();
+    let sp=document.getElementById("salesperson").value.trim();
+    let del=document.getElementById("delivery").value;
+    let s=document.getElementById("service").value;
+
+    if(!/^[A-Z0-9]{7}$/.test(vin)||!sp||!del){
+      notify("VIN 末7碼、業代名與交車日期皆為必填。",true);
+      return;
+    }
+
+    if(!SERVICES[s]){
+      notify("服務類型設定錯誤，請重新選擇。",true);
+      return;
+    }
+
+    if(rows.some(x=>x.vin===vin&&x.status!=="cancelled")){
+      notify("此 VIN 末7碼已有預約。",true);
+      return;
+    }
+
+    // 依規則從「交車日前 1 天／2 天」開始往前找：
+    // 週日跳過；當日額滿則繼續往前。
+    let z=recommend(del,s);
+
+    if(!z){
+      notify("往前 370 天內沒有可用排程。",true);
+      return;
+    }
+
+    let x={
+      vin,
+      plate:document.getElementById("plate").value.trim(),
+      model:document.getElementById("model").value.trim(),
+      color:document.getElementById("color").value.trim(),
+      salesperson:sp,
+      service:s,
+      delivery_date:del,
+      ...z,
+      priority:priority(del),
+      status:"scheduled",
+      note:document.getElementById("note").value.trim()
+    };
+
+    let r=await fetch(URL+"/rest/v1/appointments",{
+      method:"POST",
+      headers:{...headers,"Prefer":"return=representation"},
+      body:JSON.stringify(x)
+    });
+
+    if(!r.ok){
+      let tx=await r.text();
+      throw new Error(tx || "Supabase 寫入失敗");
+    }
+
+    await load();
+    e.target.reset();
+    notify("預約已寫入雲端，其他使用者重新整理即可看到。");
+    page("dashboard");
+
+  }catch(err){
+    console.error("預約送出錯誤：",err);
+    notify("預約失敗："+(err.message||err),true);
+  }
+};
+
 function renderAll(){let t=iso(new Date());document.getElementById("kpi").innerHTML=Object.entries(SERVICES).map(([k,v])=>{let n=rows.filter(x=>x.status!="cancelled"&&x.work_date===t&&x.service===k).length;return `<div class="card"><div class="muted">${v.name}</div><div class="kpi">${n} / ${v.limit}</div><small>今日使用量／每日上限</small></div>`}).join("")+`<div class="card"><div class="muted">P1 高風險案件</div><div class="kpi">${rows.filter(x=>x.status!="cancelled"&&x.priority==="P1").length}</div></div>`;renderTable()}
 function renderTable(){let q=(document.getElementById("search").value||"").toLowerCase(),a=rows.filter(x=>x.status!="cancelled"&&[x.vin,x.salesperson,x.model].join(" ").toLowerCase().includes(q));document.getElementById("tbody").innerHTML=a.map(x=>`<tr onclick="detail('${x.vin}')"><td>${x.work_date}</td><td>${x.start_time}–${x.end_time}</td><td>R${x.resource_no}</td><td>${SERVICES[x.service].name}</td><td><b>${x.vin}</b></td><td>${x.model||"—"}</td><td>${x.salesperson}</td><td>${x.delivery_date}</td><td><span class="badge ${x.priority.toLowerCase()}">${x.priority}</span></td><td>${STATUS[x.status]}</td></tr>`).join("")||`<tr><td colspan="10" style="text-align:center;padding:30px">目前沒有排程</td></tr>`}
 function detail(v){let x=rows.find(a=>a.vin===v);if(!x)return;document.getElementById("modalbox").innerHTML=`<h2>${x.model||"車輛"}｜VIN末7碼 ${x.vin}</h2><p>業代：<b>${x.salesperson}</b>　車牌：${x.plate||"未填寫"}</p><p>服務：${SERVICES[x.service].name}<br>施工：${x.work_date} ${x.start_time}–${x.end_time}｜R${x.resource_no}<br>交車：${x.delivery_date}<br>狀態：${STATUS[x.status]}</p><hr>${Object.entries(STATUS).filter(([k])=>k!="cancelled").map(([k,v])=>`<button class="btn primary" onclick="setStatus('${x.vin}','${k}')">${v}</button> `).join("")}<button class="btn" onclick="setStatus('${x.vin}','cancelled')">取消</button><div style="text-align:right;margin-top:15px"><button class="btn" onclick="closeModal()">關閉</button></div>`;document.getElementById("modal").classList.add("show")}
