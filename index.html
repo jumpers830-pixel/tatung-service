@@ -285,6 +285,32 @@ function renderTable(){let q=(document.getElementById("search").value||"").toLow
 function detail(v){let x=rows.find(a=>a.vin===v);if(!x)return;document.getElementById("modalbox").innerHTML=`<h2>${x.model||"車輛"}｜VIN末7碼 ${x.vin}</h2><p>業代：<b>${x.salesperson}</b>　車牌：${x.plate||"未填寫"}</p><p>服務：${SERVICES[x.service].name}<br>施工：${x.work_date} ${x.start_time}–${x.end_time}｜R${x.resource_no}<br>交車：${x.delivery_date}<br>狀態：${STATUS[x.status]}</p><hr>${Object.entries(STATUS).filter(([k])=>k!="cancelled").map(([k,v])=>`<button class="btn primary" onclick="setStatus('${x.vin}','${k}')">${v}</button> `).join("")}<button class="btn" onclick="setStatus('${x.vin}','cancelled')">取消</button><div style="text-align:right;margin-top:15px"><button class="btn" onclick="closeModal()">關閉</button></div>`;document.getElementById("modal").classList.add("show")}
 async function setStatus(v,s){try{let r=await fetch(URL+"/rest/v1/appointments?vin=eq."+encodeURIComponent(v),{method:"PATCH",headers:{...headers,"Prefer":"return=minimal"},body:JSON.stringify({status:s,updated_at:new Date().toISOString()})});if(!r.ok)throw 0;await load();closeModal()}catch(e){notify("狀態更新失敗。",true)}}
 function closeModal(){document.getElementById("modal").classList.remove("show")}function month(n){cd.setMonth(cd.getMonth()+n);renderCal()}
-function renderCal(){let y=cd.getFullYear(),m=cd.getMonth(),f=new Date(y,m,1),l=new Date(y,m+1,0);document.getElementById("monthLabel").textContent=`${y}年 ${m+1}月`;let h="";for(let i=0;i<f.getDay();i++)h+="<div></div>";for(let d=1;d<=l.getDate();d++){let ds=iso(new Date(y,m,d)),a=rows.filter(x=>x.status!="cancelled"&&x.work_date===ds);h+=`<div class="day"><b>${d}</b>${a.map(x=>`<div class="event" onclick="detail('${x.vin}')">${x.start_time} ${SERVICES[x.service].name}<br>${x.vin}｜${x.salesperson}</div>`).join("")}</div>`}document.getElementById("cal").innerHTML=h}
+function renderCal(){
+  const label=document.getElementById("monthLabel");
+  const cal=document.getElementById("cal");
+  if(!label || !cal) return;
+
+  const y=cd.getFullYear(), m=cd.getMonth();
+  const f=new Date(y,m,1), l=new Date(y,m+1,0);
+
+  label.textContent=`${y}年 ${m+1}月`;
+
+  let h="";
+  for(let i=0;i<f.getDay();i++) h+="<div></div>";
+
+  for(let d=1;d<=l.getDate();d++){
+    const ds=iso(new Date(y,m,d));
+    const a=rows.filter(x=>x.status!=="cancelled"&&x.work_date===ds);
+
+    h+=`<div class="day"><b>${d}</b>${
+      a.map(x=>`<div class="event" onclick="detail('${x.vin}')">${
+        x.start_time
+      } ${SERVICES[x.service].name}<br>${x.vin}｜${x.salesperson}</div>`).join("")
+    }</div>`;
+  }
+
+  cal.innerHTML=h;
+}
 load();renderCal();
-</script></body></html>
+</script>
+</body></html>
