@@ -119,8 +119,9 @@ function ymdLocal(d){
   return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
 }
 function isWorkday(d){
-  // 週日固定不排程；週六可正常排程
-  return d.getDay() !== 0 && !HOLIDAYS.has(ymdLocal(d));
+  // 週日固定不排程；HOLIDAYS 內日期也不可施工；週六可正常排程
+  const key=ymdLocal(d);
+  return d.getDay() !== 0 && !HOLIDAYS.has(key);
 }
 function previousWorkday(dateString, count){
   const d=new Date(dateString+"T00:00:00");
@@ -146,8 +147,28 @@ async function load(){if(!configured()){setSync(false,"尚未設定 Supabase");r
 function setSync(ok,t){let x=document.getElementById("sync");x.textContent="● "+(t||"雲端連線中");x.className=ok?"sync":"sync offline"}
 function notify(t,e=false){let x=document.getElementById("msg");x.className=e?"notice err":"notice";x.textContent=t;setTimeout(()=>x.textContent="",5000)}
 function iso(d){return d.toISOString().slice(0,10)}function priority(del){let n=Math.ceil((new Date(del)-new Date(new Date().toDateString()))/86400000);return n<=1?"P1":n<=3?"P2":"P3"}
-function find(d,s){if(!isWorkday(d))return null;let ds=iso(d),a=rows.filter(x=>x.status!="cancelled"&&x.work_date===ds&&x.service===s);if(a.length>=SERVICES[s].limit)return null;for(let r=1;r<=SERVICES[s].resources;r++)for(let z of SERVICES[s].slots)if(!a.some(x=>x.resource_no===r&&x.start_time<z[1]&&x.end_time>z[0]))return{resource_no:r,start_time:z[0],end_time:z[1]};return null}
-function recommend(del,s){let d=new Date(del+"T00:00:00");for(let i=0;i<370;i++){let z=find(d,s);if(z && isWorkday(d))return{work_date:iso(d),...z};d.setDate(d.getDate()-1)}return null}
+function find(d,s){
+  // 週日、週六以外的休假日均不可施工
+  if(!isWorkday(d)) return null;
+  let ds=iso(d),a=rows.filter(x=>x.status!="cancelled"&&x.work_date===ds&&x.service===s);
+  if(a.length>=SERVICES[s].limit)return null;
+  for(let r=1;r<=SERVICES[s].resources;r++)
+    for(let z of SERVICES[s].slots)
+      if(!a.some(x=>x.resource_no===r&&x.start_time<z[1]&&x.end_time>z[0]))
+        return{resource_no:r,start_time:z[0],end_time:z[1]};
+  return null;
+}
+function recommend(del,s){
+  let d=new Date(del+"T00:00:00");
+  for(let i=0;i<370;i++){
+    if(isWorkday(d)){
+      let z=find(d,s);
+      if(z)return{work_date:iso(d),...z};
+    }
+    d.setDate(d.getDate()-1);
+  }
+  return null;
+}
 function page(p){["dashboard","new","calendar"].forEach(x=>document.getElementById(x).style.display=x===p?"block":"none");if(p==="dashboard")renderAll();if(p==="calendar")renderCal()}
 document.getElementById("form").onsubmit=async e=>{e.preventDefault();if(!configured()){notify("尚未設定 Supabase，無法共用雲端資料。請先設定 config.js。",true);return}
 let vin=document.getElementById("vin").value.trim().toUpperCase(),sp=document.getElementById("salesperson").value.trim(),del=document.getElementById("delivery").value,s=document.getElementById("service").value;
