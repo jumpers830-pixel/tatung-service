@@ -151,13 +151,10 @@ function notify(t,e=false){let x=document.getElementById("msg");x.className=e?"n
 function iso(d){return ymdLocal(d)}function priority(del){let n=Math.ceil((new Date(del)-new Date(new Date().toDateString()))/86400000);return n<=1?"P1":n<=3?"P2":"P3"}
 function find(d,s){if(!isWorkday(d))return null;let ds=iso(d),a=rows.filter(x=>x.status!="cancelled"&&x.work_date===ds&&x.service===s);if(a.length>=SERVICES[s].limit)return null;for(let r=1;r<=SERVICES[s].resources;r++)for(let z of SERVICES[s].slots)if(!a.some(x=>x.resource_no===r&&x.start_time<z[1]&&x.end_time>z[0]))return{resource_no:r,start_time:z[0],end_time:z[1]};return null}
 function recommend(workDate,s){
-   let d=new Date(workDate+"T00:00:00");
-   // 施工日以使用者選定日期為起點；若當日無法排程，往後找最近可施工日。
-   for(let i=0;i<370;i++){
-      let z=find(d,s);
-      if(z)return{work_date:iso(d),...z};
-      d.setDate(d.getDate()+1);
-   }
+   // 只依使用者選定的施工日排程，不自動順延到其他日期。
+   const d=new Date(workDate+"T00:00:00");
+   const z=find(d,s);
+   if(z)return{work_date:iso(d),...z};
    return null;
 }
 function page(p){["dashboard","new","calendar"].forEach(x=>document.getElementById(x).style.display=x===p?"block":"none");if(p==="dashboard")renderAll();if(p==="calendar")renderCal()}
@@ -167,7 +164,7 @@ try{if(!configured()){notify("尚未設定 Supabase，無法共用雲端資料�
 let vin=document.getElementById("vin").value.trim().toUpperCase(),sp=document.getElementById("salesperson").value.trim(),workDate=document.getElementById("delivery").value,s=document.getElementById("service").value;
 if(!/^[A-Z0-9]{7}$/.test(vin)||!sp||!workDate){notify("VIN 末7碼、業代名與可以施工日期皆為必填。",true);return} const dateCheck=validateWorkDate(workDate); if(!dateCheck.ok){notify(dateCheck.message,true);return}
 if(rows.some(x=>x.vin===vin&&x.status!=="cancelled")){notify("此 VIN 末7碼已有預約。",true);return}
-let z=recommend(workDate,s);if(!z){notify("指定施工日後沒有可用排程。",true);return}
+let z=recommend(workDate,s);if(!z){notify("這天已滿囉~請幫我選別其它日期",true);return}
 let x={vin,plate:document.getElementById("plate").value.trim(),model:document.getElementById("model").value.trim(),color:document.getElementById("color").value.trim(),salesperson:sp,service:s,delivery_date:workDate,...z,priority:priority(workDate),status:"scheduled",note:document.getElementById("note").value.trim()};
 try{let r=await fetch(URL+"/rest/v1/appointments",{method:"POST",headers:{...headers,"Prefer":"return=representation"},body:JSON.stringify(x)});if(!r.ok){let tx=await r.text();throw new Error(tx)}await load();e.target.reset();notify(`預約已寫入雲端，施工日：${x.work_date}，其他使用者重新整理即可看到。`);page("dashboard")}
 catch(err){notify("寫入雲端失敗："+err.message,true)}
