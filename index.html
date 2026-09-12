@@ -147,7 +147,7 @@ function setSync(ok,t){let x=document.getElementById("sync");x.textContent="● 
 function notify(t,e=false){let x=document.getElementById("msg");x.className=e?"notice err":"notice";x.textContent=t;setTimeout(()=>x.textContent="",5000)}
 function iso(d){return d.toISOString().slice(0,10)}function priority(del){let n=Math.ceil((new Date(del)-new Date(new Date().toDateString()))/86400000);return n<=1?"P1":n<=3?"P2":"P3"}
 function find(d,s){
-  // 唯一固定不可施工日：週日
+  // 只有週日不可施工；週六可施工；國定假日完全忽略
   if(d.getDay() === 0) return null;
 
   const ds = iso(d);
@@ -157,10 +157,9 @@ function find(d,s){
     x.service === s
   );
 
-  // 當日該服務已達每日上限
+  // 當日該服務額滿，交由 recommend() 往前遞補一天
   if(a.length >= SERVICES[s].limit) return null;
 
-  // 找可用資源與時段
   for(let r=1; r<=SERVICES[s].resources; r++){
     for(const z of SERVICES[s].slots){
       const occupied = a.some(x =>
@@ -168,6 +167,7 @@ function find(d,s){
         x.start_time < z[1] &&
         x.end_time > z[0]
       );
+
       if(!occupied){
         return {
           resource_no:r,
@@ -178,24 +178,34 @@ function find(d,s){
     }
   }
 
-  // 資源／時段全部使用完，往前遞補
   return null;
 }
 
 function recommend(del,s){
-  // 洗車打蠟：交車日前 1 天；全車鍍膜：交車日前 2 天
-  // 若施工日遇週日或當日額滿，往前逐日遞補。
-  const offset = s === "coating" ? 2 : 1;
-  let d=new Date(del+"T00:00:00");
-  d.setDate(d.getDate()-offset);
-  for(let i=0;i<370;i++){
-    let z=find(d,s);
-    if(z)return{work_date:iso(d),...z};
-    d.setDate(d.getDate()-1);
+  // 基準施工日：
+  // 洗車＋打蠟 = 交車日前 1 天
+  // 全車鍍膜   = 交車日前 2 天
+  //
+  // 只有在「基準日是週日」或「當日額滿」時，
+  // 才從該日開始逐日往前遞補。
+  const offset = (s === "coating") ? 2 : 1;
+  let d = new Date(del + "T00:00:00");
+  d.setDate(d.getDate() - offset);
+
+  for(let i=0; i<370; i++){
+    const z = find(d,s);
+    if(z){
+      return {
+        work_date: iso(d),
+        ...z
+      };
+    }
+    d.setDate(d.getDate() - 1);
   }
+
   return null;
 }
-function page(p){["dashboard","new","calendar"].forEach(x=>document.getElementById(x).style.display=x===p?"block":"none");if(p==="dashboard")renderAll();if(p==="calendar")renderCal()}
+
 document.getElementById("form").onsubmit=async e=>{
   e.preventDefault();
 
