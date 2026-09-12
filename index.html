@@ -12,16 +12,33 @@ main{max-width:1500px;margin:auto;padding:24px}.hero{background:#111827;color:#f
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}.calendar{grid-template-columns:1fr}.day{min-height:auto}}
 </style>
 
-
-
-
+<style>
+.calendar-wrap{margin-top:18px;border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#fff}
+.calendar-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.calendar-head button{padding:7px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer}
+.calendar-title{font-size:18px;font-weight:700}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.calendar-weekday{text-align:center;font-size:12px;font-weight:700;color:#6b7280;padding:6px 0}
+.calendar-day{min-height:92px;border:1px solid #e5e7eb;border-radius:8px;padding:6px;background:#fff;overflow:hidden}
+.calendar-day.empty{background:#f9fafb}
+.calendar-day.sunday{background:#fef2f2}
+.calendar-day.holiday{background:#fff7ed}
+.calendar-day-num{font-size:12px;font-weight:700;margin-bottom:4px}
+.calendar-item{font-size:11px;padding:3px 5px;margin:3px 0;border-radius:5px;background:#eef2ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calendar-item.coating{background:#f3e8ff}
+.calendar-item.wash{background:#e0f2fe}
+.calendar-note{font-size:10px;color:#991b1b;margin-top:3px}
+@media(max-width:700px){
+ .calendar-day{min-height:70px;padding:4px}
+ .calendar-item{font-size:9px}
+ .calendar-grid{gap:3px}
+}
+</style>
 </head>
 <body>
-
-
 <header><div class="brand">🚗 大桐桃園-新車美容鍍膜預約</div><div class="nav"><span id="sync" class="sync">● 雲端連線中</span><button class="btn light" onclick="page('dashboard')">工作台</button><button class="btn outline" onclick="page('calendar')">月曆</button><button class="btn primary" onclick="page('new')">＋ 新增預約</button></div></header>
 <main>
-<section id="dashboard"><div class="hero"><h2>美容施工工作台</h2><div>VIN 末7碼、業代名、服務、交車日期為必填；車牌選填。所有使用者共用同一個 Supabase 雲端資料庫。</div></div><div id="msg"></div><div class="grid" id="kpi"></div><div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>排程清單</h3><button class="btn" onclick="load()">↻ 重新整理</button><input id="search" placeholder="搜尋 VIN／業代／車型" oninput="renderTable()" style="padding:9px;border:1px solid #ddd;border-radius:8px"></div><div class="tablewrap"><table class="table"><thead><tr><th>施工日</th><th>時間</th><th>資源</th><th>服務</th><th>VIN末7碼</th><th>車型</th><th>業代</th><th>交車</th><th>優先</th><th>狀態</th></tr></thead><tbody id="tbody"></tbody></table></div></div></section>
+<section id="dashboard"><div class="hero"><h2>美容施工工作台</h2><div>所有使用者共用同一個 Supabase 雲端資料庫。VIN 末7碼、業代名、服務、交車日期為必填；車牌選填。</div></div><div id="msg"></div><div class="grid" id="kpi"></div><div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>排程清單</h3><button class="btn" onclick="load()">↻ 重新整理</button><input id="search" placeholder="搜尋 VIN／業代／車型" oninput="renderTable()" style="padding:9px;border:1px solid #ddd;border-radius:8px"></div><div class="tablewrap"><table class="table"><thead><tr><th>施工日</th><th>時間</th><th>資源</th><th>服務</th><th>VIN末7碼</th><th>車型</th><th>業代</th><th>交車</th><th>優先</th><th>狀態</th></tr></thead><tbody id="tbody"></tbody></table></div></div></section>
 <section id="new" style="display:none"><div class="card"><h2>新增美容預約</h2><form id="form"><div class="formgrid">
 <div class="field"><label>VIN 末7碼 *</label><input id="vin" maxlength="7" minlength="7" pattern="[A-Za-z0-9]{7}" required placeholder="例如 A123456"></div>
 <div class="field"><label>車牌（選填）</label><input id="plate"></div><div class="field"><label>車型</label><input id="model"></div><div class="field"><label>車色</label><input id="color"></div>
@@ -31,10 +48,61 @@ main{max-width:1500px;margin:auto;padding:24px}.hero{background:#111827;color:#f
 <section id="calendar" style="display:none"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h2>施工月曆</h2><div><button class="btn" onclick="month(-1)">‹</button> <b id="monthLabel"></b> <button class="btn" onclick="month(1)">›</button></div></div><div class="calendar" id="cal"></div></div></section>
 </main><div class="modal" id="modal"><div class="modalbox" id="modalbox"></div></div>
 <script src="config.js"></script>
+
+<section class="calendar-wrap">
+  <div class="calendar-head">
+    <button type="button" onclick="calendarPrev()">‹ 上月</button>
+    <div class="calendar-title" id="calendarTitle"></div>
+    <button type="button" onclick="calendarNext()">下月 ›</button>
+  </div>
+  <div class="calendar-grid" id="calendarGrid"></div>
+</section>
 <script>
+let calendarCursor = new Date();
+calendarCursor.setDate(1);
 
+function calendarPrev(){ calendarCursor.setMonth(calendarCursor.getMonth()-1); renderCalendar(window.__appointments||[]); }
+function calendarNext(){ calendarCursor.setMonth(calendarCursor.getMonth()+1); renderCalendar(window.__appointments||[]); }
 
-/* === 排程工作日規則：週日固定休息 + 台灣國定假日 === */
+function renderCalendar(rows){
+  const title=document.getElementById("calendarTitle");
+  const grid=document.getElementById("calendarGrid");
+  if(!title || !grid) return;
+  const y=calendarCursor.getFullYear(), m=calendarCursor.getMonth();
+  title.textContent=`${y}年${m+1}月`;
+  const weekdays=["日","一","二","三","四","五","六"];
+  grid.innerHTML=weekdays.map(x=>`<div class="calendar-weekday">${x}</div>`).join("");
+
+  const first=new Date(y,m,1);
+  const last=new Date(y,m+1,0).getDate();
+  for(let i=0;i<first.getDay();i++) grid.insertAdjacentHTML("beforeend",'<div class="calendar-day empty"></div>');
+
+  const byDate={};
+  (rows||[]).forEach(r=>{
+    const d=r.work_date;
+    if(!byDate[d]) byDate[d]=[];
+    byDate[d].push(r);
+  });
+
+  for(let day=1;day<=last;day++){
+    const d=new Date(y,m,day);
+    const key=ymdLocal(d);
+    const sunday=d.getDay()===0;
+    const holiday=HOLIDAYS.has(key);
+    let cls="calendar-day"+(sunday?" sunday":"")+(holiday?" holiday":"");
+    let content=`<div class="calendar-day-num">${day}</div>`;
+    if(sunday) content+=`<div class="calendar-note">週日休息</div>`;
+    else if(holiday) content+=`<div class="calendar-note">休假</div>`;
+    (byDate[key]||[]).forEach(r=>{
+      const type=r.service==="coating"?"coating":"wash";
+      const label=r.service==="coating"?"鍍膜":"洗車";
+      content+=`<div class="calendar-item ${type}" title="${r.vin||""}">${label} ${r.vin||""}</div>`;
+    });
+    grid.insertAdjacentHTML("beforeend",`<div class="${cls}">${content}</div>`);
+  }
+}
+
+/* === 行事曆與施工日期規則 === */
 const HOLIDAYS = new Set([
   "2026-01-01",
   "2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-02-20",
@@ -47,13 +115,12 @@ const HOLIDAYS = new Set([
   "2026-10-24","2026-10-25",
   "2026-12-25"
 ]);
-function localYMD(d){
+function ymdLocal(d){
   return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
 }
 function isWorkday(d){
-  // 週日固定休息；週六可依現場容量正常排程。
-  // 另外跳過政府公告國定假日/補假日。
-  return d.getDay()!==0 && !HOLIDAYS.has(localYMD(d));
+  // 週日固定不排程；週六可正常排程
+  return d.getDay() !== 0 && !HOLIDAYS.has(ymdLocal(d));
 }
 function previousWorkday(dateString, count){
   const d=new Date(dateString+"T00:00:00");
@@ -62,12 +129,12 @@ function previousWorkday(dateString, count){
     d.setDate(d.getDate()-1);
     if(isWorkday(d)) n--;
   }
-  return localYMD(d);
+  return ymdLocal(d);
 }
 function getScheduledWorkDate(deliveryDate, service){
-  // 洗車打蠟：交車日前 1 個工作日
-  // 全車鍍膜：交車日前 2 個工作日
-  return previousWorkday(deliveryDate, service==="coating" ? 2 : 1);
+  // wash_wax：交車日前 1 個工作日
+  // coating：交車日前 2 個工作日
+  return previousWorkday(deliveryDate, service === "coating" ? 2 : 1);
 }
 
 const C=window.SUPABASE_CONFIG||{};const URL=(C.url||"").replace(/\/$/,""),KEY=C.anonKey||"";
