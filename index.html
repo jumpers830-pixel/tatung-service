@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>新車美容鍍膜預約系統</title>
+<title>大桐桃園-新車美容鍍膜預約系統</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#17202a;font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif}
 header{background:#111827;color:#fff;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}.brand{font-weight:800;font-size:19px}.nav{display:flex;gap:8px}.btn{border:0;border-radius:9px;padding:9px 14px;cursor:pointer;font-weight:700}.primary{background:#2563eb;color:#fff}.light{background:#fff;color:#111827}.outline{background:transparent;border:1px solid #64748b;color:#fff}
@@ -11,9 +11,34 @@ main{max-width:1500px;margin:auto;padding:24px}.hero{background:#111827;color:#f
 .sync{font-size:13px;padding:6px 9px;border-radius:99px;background:#dcfce7;color:#166534}.offline{background:#fee2e2;color:#991b1b}
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}.calendar{grid-template-columns:1fr}.day{min-height:auto}}
 </style>
+
+<style>
+.status-grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:10px;margin:14px 0}
+.status-card{border-radius:12px;padding:12px 14px;border:1px solid #d1d5db;background:#fff}
+.status-card strong{display:block;font-size:22px;margin-top:4px}
+.status-card.scheduled{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
+.status-card.in_progress{border-color:#d97706;background:#fffbeb;color:#b45309}
+.status-card.qc{border-color:#7c3aed;background:#f5f3ff;color:#6d28d9}
+.status-card.completed{border-color:#16a34a;background:#f0fdf4;color:#15803d}
+@media(max-width:800px){.status-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+<style>
+select.status-select option[value="scheduled"]{background:#eff6ff;color:#1d4ed8}
+select.status-select option[value="in_progress"]{background:#fffbeb;color:#b45309}
+select.status-select option[value="qc"]{background:#f5f3ff;color:#6d28d9}
+select.status-select option[value="completed"]{background:#f0fdf4;color:#15803d}
+</style>
 </head>
 <body>
-<header><div class="brand">🚗 新車美容鍍膜預約</div><div class="nav"><span id="sync" class="sync">● 雲端連線中</span><button class="btn light" onclick="page('dashboard')">工作台</button><button class="btn outline" onclick="page('calendar')">月曆</button><button class="btn primary" onclick="page('new')">＋ 新增預約</button></div></header>
+<div class="status-grid" id="statusGrid">
+  <div class="status-card scheduled"><span>已排程</span><strong id="countScheduled">0</strong></div>
+  <div class="status-card in_progress"><span>施工中</span><strong id="countInProgress">0</strong></div>
+  <div class="status-card qc"><span>QC檢查</span><strong id="countQc">0</strong></div>
+  <div class="status-card completed"><span>已完工</span><strong id="countCompleted">0</strong></div>
+</div>
+
+<header><div class="brand">🚗 大桐桃園-新車美容鍍膜預約</div><div class="nav"><span id="sync" class="sync">● 雲端連線中</span><button class="btn light" onclick="page('dashboard')">工作台</button><button class="btn outline" onclick="page('calendar')">月曆</button><button class="btn primary" onclick="page('new')">＋ 新增預約</button></div></header>
 <main>
 <section id="dashboard"><div class="hero"><h2>美容施工工作台</h2><div>所有使用者共用同一個 Supabase 雲端資料庫。VIN 末7碼、業代名、服務、交車日期為必填；車牌選填。</div></div><div id="msg"></div><div class="grid" id="kpi"></div><div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>排程清單</h3><button class="btn" onclick="load()">↻ 重新整理</button><input id="search" placeholder="搜尋 VIN／業代／車型" oninput="renderTable()" style="padding:9px;border:1px solid #ddd;border-radius:8px"></div><div class="tablewrap"><table class="table"><thead><tr><th>施工日</th><th>時間</th><th>資源</th><th>服務</th><th>VIN末7碼</th><th>車型</th><th>業代</th><th>交車</th><th>優先</th><th>狀態</th></tr></thead><tbody id="tbody"></tbody></table></div></div></section>
 <section id="new" style="display:none"><div class="card"><h2>新增美容預約</h2><form id="form"><div class="formgrid">
@@ -26,6 +51,49 @@ main{max-width:1500px;margin:auto;padding:24px}.hero{background:#111827;color:#f
 </main><div class="modal" id="modal"><div class="modalbox" id="modalbox"></div></div>
 <script src="config.js"></script>
 <script>
+function updateStatusCounters(rows){
+  const c={scheduled:0,in_progress:0,qc:0,completed:0};
+  (rows||[]).forEach(r=>{if(c[r.status]!==undefined)c[r.status]++;});
+  const ids={scheduled:"countScheduled",in_progress:"countInProgress",qc:"countQc",completed:"countCompleted"};
+  Object.keys(ids).forEach(k=>{
+    const el=document.getElementById(ids[k]);
+    if(el) el.textContent=c[k];
+  });
+}
+
+/* === 台灣工作日與國定假日排程 === */
+const HOLIDAYS = new Set([
+  "2026-01-01",
+  "2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-02-20",
+  "2026-02-27","2026-02-28",
+  "2026-04-03","2026-04-04","2026-04-05",
+  "2026-05-01",
+  "2026-06-19",
+  "2026-09-25","2026-09-28",
+  "2026-10-09","2026-10-10",
+  "2026-10-24","2026-10-25",
+  "2026-12-25"
+]);
+function localYMD(d){
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function isWorkday(d){
+  const day=d.getDay();
+  return day!==0 && day!==6 && !HOLIDAYS.has(localYMD(d));
+}
+function previousWorkday(dateString, count){
+  const d=new Date(dateString+"T00:00:00");
+  let n=count;
+  while(n>0){
+    d.setDate(d.getDate()-1);
+    if(isWorkday(d)) n--;
+  }
+  return localYMD(d);
+}
+function getScheduledWorkDate(deliveryDate, service){
+  return previousWorkday(deliveryDate, service==="coating" ? 2 : 1);
+}
+
 const C=window.SUPABASE_CONFIG||{};const URL=(C.url||"").replace(/\/$/,""),KEY=C.anonKey||"";
 const SERVICES={wash_wax:{name:"洗車＋打蠟",limit:8,resources:4,slots:[["08:30","10:30"],["10:30","12:30"],["13:00","15:00"],["15:00","17:00"]]},coating:{name:"全車鍍膜",limit:3,resources:3,slots:[["08:30","16:30"]]}};
 const STATUS={scheduled:"已排程",in_progress:"施工中",qc:"QC檢查",completed:"已完工",cancelled:"取消"};let rows=[],cd=new Date();cd.setDate(1);
