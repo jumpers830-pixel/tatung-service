@@ -119,9 +119,8 @@ function ymdLocal(d){
   return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
 }
 function isWorkday(d){
-  // 週日固定不排程；HOLIDAYS 內日期也不可施工；週六可正常排程
-  const key=ymdLocal(d);
-  return d.getDay() !== 0 && !HOLIDAYS.has(key);
+  // 排程規則：只有週日不可施工；國定假日完全不考慮，週六可施工
+  return d.getDay() !== 0;
 }
 function previousWorkday(dateString, count){
   const d=new Date(dateString+"T00:00:00");
@@ -148,23 +147,27 @@ function setSync(ok,t){let x=document.getElementById("sync");x.textContent="● 
 function notify(t,e=false){let x=document.getElementById("msg");x.className=e?"notice err":"notice";x.textContent=t;setTimeout(()=>x.textContent="",5000)}
 function iso(d){return d.toISOString().slice(0,10)}function priority(del){let n=Math.ceil((new Date(del)-new Date(new Date().toDateString()))/86400000);return n<=1?"P1":n<=3?"P2":"P3"}
 function find(d,s){
-  // 週日、週六以外的休假日均不可施工
+  // 只有週日不可施工；週六可以正常施工
   if(!isWorkday(d)) return null;
   let ds=iso(d),a=rows.filter(x=>x.status!="cancelled"&&x.work_date===ds&&x.service===s);
   if(a.length>=SERVICES[s].limit)return null;
-  for(let r=1;r<=SERVICES[s].resources;r++)
-    for(let z of SERVICES[s].slots)
+  for(let r=1;r<=SERVICES[s].resources;r++){
+    for(let z of SERVICES[s].slots){
       if(!a.some(x=>x.resource_no===r&&x.start_time<z[1]&&x.end_time>z[0]))
         return{resource_no:r,start_time:z[0],end_time:z[1]};
+    }
+  }
   return null;
 }
 function recommend(del,s){
+  // 洗車打蠟：交車日前 1 天；全車鍍膜：交車日前 2 天
+  // 若施工日遇週日或當日額滿，往前逐日遞補。
+  const offset = s === "coating" ? 2 : 1;
   let d=new Date(del+"T00:00:00");
+  d.setDate(d.getDate()-offset);
   for(let i=0;i<370;i++){
-    if(isWorkday(d)){
-      let z=find(d,s);
-      if(z)return{work_date:iso(d),...z};
-    }
+    let z=find(d,s);
+    if(z)return{work_date:iso(d),...z};
     d.setDate(d.getDate()-1);
   }
   return null;
