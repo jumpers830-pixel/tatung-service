@@ -47,6 +47,7 @@ main{max-width:1500px;margin:auto;padding:24px}.hero{background:#111827;color:#f
 <label>可以施工日期 *</label>
 <input id="delivery" type="date" required onchange="validateWorkDateInput(this)">
 <div class="workday-hint">溫馨提醒您，服務廠週日無法施工哦~</div>
+<div class="workday-hint">若選擇的服務項目當日已達排程上限，系統將無法完成預約。請幫我選則其它日期或以人工方式安排，謝謝您的配合~</div>
 </div><div class="field full"><label>備註</label><textarea id="note" rows="3"></textarea></div>
 </div><div class="actions"><button class="btn primary">自動排程並寫入雲端</button><button type="button" class="btn" onclick="page('dashboard')">取消</button></div></form></div></section>
 <section id="calendar" style="display:none"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h2>施工月曆</h2><div><button class="btn" onclick="month(-1)">‹</button> <b id="monthLabel"></b> <button class="btn" onclick="month(1)">›</button></div></div><div class="calendar" id="cal"></div></div></section>
