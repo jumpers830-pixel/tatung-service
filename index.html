@@ -142,7 +142,7 @@ function getScheduledWorkDate(deliveryDate, service){
 }
 
 const C=window.SUPABASE_CONFIG||{};const URL=(C.url||"").replace(/\/$/,""),KEY=C.anonKey||"";
-const SERVICES={wash_wax:{name:"洗車＋打蠟",limit:8,resources:4,slots:[["08:30","10:30"],["10:30","12:30"],["13:00","15:00"],["15:00","17:00"]]},coating:{name:"全車鍍膜",limit:3,resources:3,slots:[["08:30","16:30"]]}};
+const SERVICES={wash_wax:{name:"洗車+維護劑+內裝清潔",limit:8,resources:4,slots:[["08:30","10:30"],["10:30","12:30"],["13:00","15:00"],["15:00","17:00"]]},coating:{name:"全車鍍膜",limit:3,resources:3,slots:[["08:30","16:30"]]}};
 const STATUS={scheduled:"已排程",in_progress:"施工中",qc:"QC檢查",completed:"已完工",cancelled:"取消"};let rows=[],cd=new Date();cd.setDate(1);
 const headers={"apikey":KEY,"Authorization":"Bearer "+KEY,"Content-Type":"application/json"};
 function configured(){return URL&&KEY}
